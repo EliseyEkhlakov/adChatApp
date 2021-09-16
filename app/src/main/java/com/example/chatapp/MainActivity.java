@@ -1,14 +1,18 @@
 package com.example.chatapp;
 
+import androidx.activity.result.ActivityResult;
 import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import android.app.Activity;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -44,6 +48,7 @@ public class MainActivity extends AppCompatActivity {
     private MessagesAdapter adapter;
     private EditText editTextMessage;
     private ImageView imageViewSendMessage;
+    private ImageView imageViewAddImage;
     private String author;
     private FirebaseAuth mAuth;
     private FirebaseUser user;
@@ -72,6 +77,7 @@ public class MainActivity extends AppCompatActivity {
         recyclerViewMessages = findViewById(R.id.recyclerViewMessages);
         editTextMessage = findViewById(R.id.editTextMessage);
         imageViewSendMessage = findViewById(R.id.imageViewSendMessage);
+        imageViewAddImage = findViewById(R.id.imageViewAddImage);
         adapter = new MessagesAdapter();
         recyclerViewMessages.setLayoutManager(new LinearLayoutManager(this));
         recyclerViewMessages.setAdapter(adapter);
@@ -83,6 +89,44 @@ public class MainActivity extends AppCompatActivity {
                 sendMessage();
             }
         });
+        // You can do the assignment inside onAttach or onCreate, i.e, before the activity is displayed
+        ActivityResultLauncher<Intent> getImageActivityResultLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                new ActivityResultCallback<ActivityResult>() {
+                    @Override
+                    public void onActivityResult(ActivityResult result) {
+                        if (result.getResultCode() == Activity.RESULT_OK) {
+                            Intent data = result.getData();
+                            if (data != null) {
+                                Uri uri = data.getData();
+                                Toast.makeText(MainActivity.this, uri.toString(), Toast.LENGTH_SHORT).show();
+                            }
+                        }
+                    }
+                });
+
+        imageViewAddImage.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                intent.setType("image/jpeg");
+                intent.putExtra(Intent.EXTRA_LOCAL_ONLY, true);
+                //
+                getImageActivityResultLauncher.launch(intent);
+            }
+        });
+
+        if (mAuth.getCurrentUser() != null) {
+            Toast.makeText(this, "Logged", Toast.LENGTH_SHORT).show();
+        } else {
+            signOut();
+        }
+
+    }
+
+    @Override
+    protected void onPostResume() {
+        super.onPostResume();
         db.collection("messages")
                 .orderBy("date")
                 .addSnapshotListener(new EventListener<QuerySnapshot>() {
@@ -95,50 +139,6 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }
                 });
-        if (mAuth.getCurrentUser() != null) {
-            Toast.makeText(this, "Logged", Toast.LENGTH_SHORT).show();
-        } else {
-            final ActivityResultLauncher<Intent> signInLauncher = registerForActivityResult(
-                    new FirebaseAuthUIActivityResultContract(),
-                    new ActivityResultCallback<FirebaseAuthUIAuthenticationResult>() {
-                        @Override
-                        public void onActivityResult(FirebaseAuthUIAuthenticationResult result) {
-                            onSignInResult(result);
-                        }
-                    }
-            );
-            AuthUI.getInstance().signOut(this)
-                    .addOnCompleteListener(new OnCompleteListener<Void>() {
-                        @Override
-                        public void onComplete(@NonNull Task<Void> task) {
-                            if (task.isSuccessful()) {
-                                // Choose authentication providers
-                                List<AuthUI.IdpConfig> providers = Arrays.asList(
-                                        new AuthUI.IdpConfig.EmailBuilder().build(),
-                                        new AuthUI.IdpConfig.GoogleBuilder().build());
-
-// Create and launch sign-in intent
-                                Intent signInIntent = AuthUI.getInstance()
-                                        .createSignInIntentBuilder()
-                                        .setAvailableProviders(providers)
-                                        .build();
-                                signInLauncher.launch(signInIntent);
-                            }
-                        }
-                    });
-            // Choose authentication providers
-            List<AuthUI.IdpConfig> providers = Arrays.asList(
-                    new AuthUI.IdpConfig.EmailBuilder().build(),
-                    new AuthUI.IdpConfig.GoogleBuilder().build());
-
-// Create and launch sign-in intent
-            Intent signInIntent = AuthUI.getInstance()
-                    .createSignInIntentBuilder()
-                    .setAvailableProviders(providers)
-                    .build();
-            signInLauncher.launch(signInIntent);
-        }
-
     }
 
     private void sendMessage() {
@@ -175,6 +175,7 @@ public class MainActivity extends AppCompatActivity {
             user = mAuth.getCurrentUser();
             if (user != null) {
                 Toast.makeText(this, user.getEmail(), Toast.LENGTH_SHORT).show();
+                author = user.getEmail();
             }
             // ...
         } else {
