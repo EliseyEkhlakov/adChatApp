@@ -1,5 +1,7 @@
 package com.example.chatapp;
 
+import androidx.activity.result.ActivityResultCallback;
+import androidx.activity.result.ActivityResultLauncher;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
@@ -15,9 +17,16 @@ import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.Toast;
 
+import com.firebase.ui.auth.AuthUI;
+import com.firebase.ui.auth.FirebaseAuthUIActivityResultContract;
+import com.firebase.ui.auth.IdpResponse;
+import com.firebase.ui.auth.data.model.FirebaseAuthUIAuthenticationResult;
+import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.EventListener;
 import com.google.firebase.firestore.FirebaseFirestore;
@@ -25,6 +34,7 @@ import com.google.firebase.firestore.FirebaseFirestoreException;
 import com.google.firebase.firestore.QuerySnapshot;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
@@ -36,6 +46,7 @@ public class MainActivity extends AppCompatActivity {
     private ImageView imageViewSendMessage;
     private String author;
     private FirebaseAuth mAuth;
+    private FirebaseUser user;
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -80,13 +91,52 @@ public class MainActivity extends AppCompatActivity {
                         if (queryDocumentSnapshots != null) {
                             List<Message> messages = queryDocumentSnapshots.toObjects(Message.class);
                             adapter.setMessages(messages);
+                            recyclerViewMessages.scrollToPosition(adapter.getItemCount() - 1);
                         }
                     }
                 });
         if (mAuth.getCurrentUser() != null) {
             Toast.makeText(this, "Logged", Toast.LENGTH_SHORT).show();
         } else {
-            signOut();
+            final ActivityResultLauncher<Intent> signInLauncher = registerForActivityResult(
+                    new FirebaseAuthUIActivityResultContract(),
+                    new ActivityResultCallback<FirebaseAuthUIAuthenticationResult>() {
+                        @Override
+                        public void onActivityResult(FirebaseAuthUIAuthenticationResult result) {
+                            onSignInResult(result);
+                        }
+                    }
+            );
+            AuthUI.getInstance().signOut(this)
+                    .addOnCompleteListener(new OnCompleteListener<Void>() {
+                        @Override
+                        public void onComplete(@NonNull Task<Void> task) {
+                            if (task.isSuccessful()) {
+                                // Choose authentication providers
+                                List<AuthUI.IdpConfig> providers = Arrays.asList(
+                                        new AuthUI.IdpConfig.EmailBuilder().build(),
+                                        new AuthUI.IdpConfig.GoogleBuilder().build());
+
+// Create and launch sign-in intent
+                                Intent signInIntent = AuthUI.getInstance()
+                                        .createSignInIntentBuilder()
+                                        .setAvailableProviders(providers)
+                                        .build();
+                                signInLauncher.launch(signInIntent);
+                            }
+                        }
+                    });
+            // Choose authentication providers
+            List<AuthUI.IdpConfig> providers = Arrays.asList(
+                    new AuthUI.IdpConfig.EmailBuilder().build(),
+                    new AuthUI.IdpConfig.GoogleBuilder().build());
+
+// Create and launch sign-in intent
+            Intent signInIntent = AuthUI.getInstance()
+                    .createSignInIntentBuilder()
+                    .setAvailableProviders(providers)
+                    .build();
+            signInLauncher.launch(signInIntent);
         }
 
     }
@@ -116,5 +166,25 @@ public class MainActivity extends AppCompatActivity {
     private void signOut() {
         Intent intent = new Intent(this, RegisterActivity.class);
         startActivity(intent);
+    }
+
+    private void onSignInResult(FirebaseAuthUIAuthenticationResult result) {
+        IdpResponse response = result.getIdpResponse();
+        if (result.getResultCode() == RESULT_OK) {
+            // Successfully signed in
+            user = mAuth.getCurrentUser();
+            if (user != null) {
+                Toast.makeText(this, user.getEmail(), Toast.LENGTH_SHORT).show();
+            }
+            // ...
+        } else {
+            // Sign in failed. If response is null the user canceled the
+            // sign-in flow using the back button. Otherwise check
+            // response.getError().getErrorCode() and handle the error.
+            // ...
+            if (response != null) {
+                Toast.makeText(MainActivity.this, "Error " + response.getError().getErrorCode(), Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 }
