@@ -3,10 +3,13 @@ package com.example.chatapp;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
+
+import com.squareup.picasso.Picasso;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,8 +40,18 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.Messag
 
     @Override
     public void onBindViewHolder(@NonNull MessagesViewHolder messagesViewHolder, int position) {
-        messagesViewHolder.textViewAuthor.setText(messages.get(position).getAuthor());
-        messagesViewHolder.textViewTextOfMessage.setText(messages.get(position).getTextOfMessage());
+        Message message = messages.get(position);
+        String textOfMessage = message.getTextOfMessage();
+        String urlToImage = message.getImageUrl();
+        messagesViewHolder.textViewAuthor.setText(message.getAuthor());
+        if(textOfMessage != null && !textOfMessage.isEmpty()) {
+            messagesViewHolder.textViewTextOfMessage.setText(textOfMessage);
+            messagesViewHolder.imageViewImage.setVisibility(View.GONE);
+        }
+        if(urlToImage != null && !urlToImage.isEmpty()){
+            messagesViewHolder.imageViewImage.setVisibility(View.VISIBLE);
+            Picasso.get().load(urlToImage).into(messagesViewHolder.imageViewImage);
+        }
     }
 
     @Override
@@ -50,11 +63,13 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.Messag
 
         private TextView textViewAuthor;
         private TextView textViewTextOfMessage;
+        private ImageView imageViewImage;
 
         public MessagesViewHolder(@NonNull View itemView) {
             super(itemView);
             textViewAuthor = itemView.findViewById(R.id.textViewAuthor);
             textViewTextOfMessage = itemView.findViewById(R.id.textViewTextOfMessage);
+            imageViewImage = itemView.findViewById(R.id.imageViewImage);
         }
     }
 }

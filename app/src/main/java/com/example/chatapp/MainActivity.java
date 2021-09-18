@@ -91,12 +91,12 @@ public class MainActivity extends AppCompatActivity {
         adapter = new MessagesAdapter();
         recyclerViewMessages.setLayoutManager(new LinearLayoutManager(this));
         recyclerViewMessages.setAdapter(adapter);
-
         author = "C'est moi";
+        Log.i("ChatApp", "onCreate");
         imageViewSendMessage.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                sendMessage();
+                sendMessage(editTextMessage.getText().toString().trim(), null);
             }
         });
         // You can do the assignment inside onAttach or onCreate, i.e, before the activity is displayed
@@ -105,11 +105,12 @@ public class MainActivity extends AppCompatActivity {
                 new ActivityResultCallback<ActivityResult>() {
                     @Override
                     public void onActivityResult(ActivityResult result) {
+                        Log.i("Chat App", "onActivityResult");
                         if (result.getResultCode() == Activity.RESULT_OK) {
                             Intent data = result.getData();
                             if (data != null) {
                                 Uri uri = data.getData();
-                                final StorageReference referenceToImage = reference.child("images/" +uri.getLastPathSegment());
+                                final StorageReference referenceToImage = reference.child("images/" + uri.getLastPathSegment());
                                 referenceToImage.putFile(uri)
                                         .continueWithTask(new Continuation<UploadTask.TaskSnapshot, Task<Uri>>() {
                                             @Override
@@ -117,22 +118,29 @@ public class MainActivity extends AppCompatActivity {
                                                 if (!task.isSuccessful()) {
                                                     throw task.getException();
                                                 }
-
                                                 // Continue with the task to get the download URL
                                                 return referenceToImage.getDownloadUrl();
                                             }
                                         }).addOnCompleteListener(new OnCompleteListener<Uri>() {
                                     @Override
                                     public void onComplete(@NonNull Task<Uri> task) {
+                                        Log.i("ChatApp", "complete");
                                         if (task.isSuccessful()) {
                                             Uri downloadUri = task.getResult();
                                             if (downloadUri != null) {
-                                                Log.i("Chat App", downloadUri.toString());
+                                                Log.i("ChatApp", downloadUri.toString());
+                                                sendMessage(null, downloadUri.toString());
                                             }
                                         } else {
                                             // Handle failures
                                             // ...
                                         }
+                                    }
+                                })
+                                .addOnFailureListener(new OnFailureListener() {
+                                    @Override
+                                    public void onFailure(@NonNull Exception e) {
+                                        Log.i("ChatApp", "onActivityResult " + e.getMessage());
                                     }
                                 });
                             }
@@ -176,26 +184,26 @@ public class MainActivity extends AppCompatActivity {
                 });
     }
 
-    private void sendMessage() {
-        String textOfMessage = editTextMessage.getText().toString().trim();
+    private void sendMessage(String textOfMessage, String urlToImage) {
+        Message message = null;
         if (!textOfMessage.isEmpty()) {
-
-            recyclerViewMessages.scrollToPosition(adapter.getItemCount() - 1);
-            db.collection("messages")
-                    .add(new Message(author, textOfMessage, System.currentTimeMillis()))
-                    .addOnSuccessListener(new OnSuccessListener<DocumentReference>() {
-                        @Override
-                        public void onSuccess(DocumentReference documentReference) {
-                            editTextMessage.setText("");
-                        }
-                    })
-                    .addOnFailureListener(new OnFailureListener() {
-                        @Override
-                        public void onFailure(@NonNull Exception e) {
-                            Toast.makeText(MainActivity.this, "Error", Toast.LENGTH_SHORT).show();
-                        }
-                    });
+            message = new Message(author, textOfMessage, System.currentTimeMillis(), null);
+        } else if (urlToImage != null && !urlToImage.isEmpty()) {
+            message = new Message(author, null, System.currentTimeMillis(), urlToImage);
         }
+        db.collection("messages")
+                .add(message)
+                .addOnSuccessListener(new OnSuccessListener<DocumentReference>() {
+                    @Override
+                    public void onSuccess(DocumentReference documentReference) {
+                        editTextMessage.setText("");
+                    }
+                }).addOnFailureListener(new OnFailureListener() {
+            @Override
+            public void onFailure(@NonNull Exception e) {
+                Log.i("ChatApp", e.getMessage());
+            }
+        });
     }
 
     private void signOut() {
