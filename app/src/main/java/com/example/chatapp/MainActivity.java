@@ -12,8 +12,10 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
+import android.preference.PreferenceManager;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -38,9 +40,11 @@ import com.google.firebase.firestore.EventListener;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.FirebaseFirestoreException;
 import com.google.firebase.firestore.QuerySnapshot;
+import com.google.firebase.firestore.ServerTimestamp;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
 import com.google.firebase.storage.UploadTask;
+import com.google.firestore.v1.DocumentTransform;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -54,11 +58,11 @@ public class MainActivity extends AppCompatActivity {
     private EditText editTextMessage;
     private ImageView imageViewSendMessage;
     private ImageView imageViewAddImage;
-    private String author;
     private FirebaseAuth mAuth;
     private FirebaseUser user;
     private FirebaseStorage storage;
     private StorageReference reference;
+    private SharedPreferences preferences;
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -78,7 +82,9 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Log.i("ChatApp", "onCreate");
         setContentView(R.layout.activity_main);
+        preferences = PreferenceManager.getDefaultSharedPreferences(this);
         db = FirebaseFirestore.getInstance();
         mAuth = FirebaseAuth.getInstance();
         storage = FirebaseStorage.getInstance();
@@ -88,11 +94,9 @@ public class MainActivity extends AppCompatActivity {
         editTextMessage = findViewById(R.id.editTextMessage);
         imageViewSendMessage = findViewById(R.id.imageViewSendMessage);
         imageViewAddImage = findViewById(R.id.imageViewAddImage);
-        adapter = new MessagesAdapter();
+        adapter = new MessagesAdapter(this);
         recyclerViewMessages.setLayoutManager(new LinearLayoutManager(this));
         recyclerViewMessages.setAdapter(adapter);
-        author = "C'est moi";
-        Log.i("ChatApp", "onCreate");
         imageViewSendMessage.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -137,12 +141,12 @@ public class MainActivity extends AppCompatActivity {
                                         }
                                     }
                                 })
-                                .addOnFailureListener(new OnFailureListener() {
-                                    @Override
-                                    public void onFailure(@NonNull Exception e) {
-                                        Log.i("ChatApp", "onActivityResult " + e.getMessage());
-                                    }
-                                });
+                                        .addOnFailureListener(new OnFailureListener() {
+                                            @Override
+                                            public void onFailure(@NonNull Exception e) {
+                                                Log.i("ChatApp", "onActivityResult " + e.getMessage());
+                                            }
+                                        });
                             }
                         }
                     }
@@ -158,9 +162,8 @@ public class MainActivity extends AppCompatActivity {
                 getImageActivityResultLauncher.launch(intent);
             }
         });
-
         if (mAuth.getCurrentUser() != null) {
-            Toast.makeText(this, "Logged", Toast.LENGTH_SHORT).show();
+            preferences.edit().putString("author", mAuth.getCurrentUser().getEmail()).apply();
         } else {
             signOut();
         }
@@ -185,11 +188,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void sendMessage(String textOfMessage, String urlToImage) {
-        Message message = null;
+        Message message;
+        String author = preferences.getString("author", "Anonym");
         if (!textOfMessage.isEmpty()) {
             message = new Message(author, textOfMessage, System.currentTimeMillis(), null);
         } else if (urlToImage != null && !urlToImage.isEmpty()) {
             message = new Message(author, null, System.currentTimeMillis(), urlToImage);
+        } else {
+            Log.i("ChaApp", "error in sendMessage");
+            return;
         }
         db.collection("messages")
                 .add(message)
@@ -218,7 +225,7 @@ public class MainActivity extends AppCompatActivity {
             user = mAuth.getCurrentUser();
             if (user != null) {
                 Toast.makeText(this, user.getEmail(), Toast.LENGTH_SHORT).show();
-                author = user.getEmail();
+                preferences.edit().putString("author", user.getEmail()).apply();
             }
             // ...
         } else {
